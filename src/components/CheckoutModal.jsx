@@ -392,7 +392,12 @@ export default function CheckoutModal() {
                       <div className="flex-1">
                         <div className="text-red-700 font-bold uppercase text-sm">{item.name}</div>
                         <div className="text-gray-500 text-xs font-medium mt-1">
-                          Rs. {item.price.toFixed(2)} / item
+                          Rs. {(item.offerPrice ?? item.price).toFixed(2)} / item
+                          {item.offerPrice != null && item.offerPrice < item.price && (
+                            <span className="line-through ml-1.5 text-gray-400">
+                              Rs. {item.price.toFixed(2)}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -421,7 +426,7 @@ export default function CheckoutModal() {
                         </button>
                       </div>
                       <div className="text-right text-gray-800 font-bold w-20">
-                        Rs. {(item.price * item.qty).toFixed(0)}
+                        Rs. {((item.offerPrice ?? item.price) * item.qty).toFixed(0)}
                       </div>
                     </div>
                   </div>

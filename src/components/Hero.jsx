@@ -1,8 +1,27 @@
 import React from 'react';
-import { Download, Zap } from 'lucide-react';
+import { Download, Zap, Loader2, Check } from 'lucide-react';
 import { Fireworks } from '@fireworks-js/react';
+import { downloadPriceList } from '../api/client';
 
 export default function Hero() {
+  const [pdfState, setPdfState] = React.useState('idle'); // idle | busy | done | error
+  const [pdfError, setPdfError] = React.useState('');
+
+  const handleDownloadPriceList = async () => {
+    if (pdfState === 'busy') return;
+    setPdfState('busy');
+    setPdfError('');
+    try {
+      await downloadPriceList();
+      setPdfState('done');
+      setTimeout(() => setPdfState('idle'), 4000);
+    } catch (err) {
+      setPdfError(err.message || 'The price list could not be downloaded.');
+      setPdfState('error');
+      setTimeout(() => setPdfState('idle'), 6000);
+    }
+  };
+
   return (
     <section className="relative w-full h-[90vh] overflow-hidden flex items-center bg-primary-deep">
       
@@ -68,11 +87,31 @@ export default function Hero() {
               className="bg-accent-electric text-neutral-dark font-bold text-lg px-8 py-4 rounded-full flex justify-center items-center gap-2 w-full sm:w-auto hover:shadow-[0_0_20px_rgba(57,255,20,0.4)] transition-all">
               SHOP NOW <Zap className="w-5 h-5" />
             </button>
-            <button className="bg-transparent border-2 border-accent-metallic text-accent-metallic font-bold text-lg px-8 py-4 rounded-full flex justify-center items-center gap-2 w-full sm:w-auto hover:bg-accent-metallic hover:text-neutral-dark transition-all">
-              <Download className="w-5 h-5" /> DOWNLOAD PRICE LIST
+            <button
+              onClick={handleDownloadPriceList}
+              disabled={pdfState === 'busy'}
+              className="bg-transparent border-2 border-accent-metallic text-accent-metallic font-bold text-lg px-8 py-4 rounded-full flex justify-center items-center gap-2 w-full sm:w-auto hover:bg-accent-metallic hover:text-neutral-dark disabled:opacity-70 disabled:cursor-wait transition-all"
+            >
+              {pdfState === 'busy' ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" /> PREPARING PDF...
+                </>
+              ) : pdfState === 'done' ? (
+                <>
+                  <Check className="w-5 h-5" /> DOWNLOADED
+                </>
+              ) : (
+                <>
+                  <Download className="w-5 h-5" /> DOWNLOAD PRICE LIST
+                </>
+              )}
             </button>
           </div>
           
+          {pdfError && (
+            <p className="text-red-300 text-sm font-semibold max-w-lg -mt-2">{pdfError}</p>
+          )}
+
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 text-white/80 font-medium mt-6 text-center sm:text-left text-sm sm:text-base">
             <span className="text-accent-metallic font-bold">⭐ 4.9/5</span>
             <span>| 10,000+ Happy Customers | 25+ Years Trusted</span>

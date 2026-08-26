@@ -86,6 +86,12 @@ export const CartProvider = ({ children }) => {
     [cartItems]
   );
 
+  /** What a line actually costs today, honouring any offer price. */
+  const unitPriceOf = (item) =>
+    item.offerPrice !== null && item.offerPrice !== undefined && item.offerPrice < item.price
+      ? item.offerPrice
+      : item.price;
+
   const cartCount = useMemo(
     () => Object.values(cart).reduce((a, b) => a + b, 0),
     [cart]
@@ -96,8 +102,28 @@ export const CartProvider = ({ children }) => {
    * The authoritative figure always comes back from POST /api/orders.
    */
   const estimate = useMemo(() => {
-    const subtotal = cartTotal;
-    const discount = (subtotal * (pricing.discountPercent || 0)) / 100;
+    let subtotal = 0;
+    let discount = 0;
+
+    // Per item, exactly as the server does it: an explicit offer price
+    // wins over the order-wide percentage. Doing this line by line is
+    // what keeps the figure on screen equal to the figure charged.
+    for (const item of cartItems) {
+      const lineSubtotal = item.price * item.qty;
+      subtotal += lineSubtotal;
+
+      const unit = unitPriceOf(item);
+      if (unit < item.price) {
+        discount += (item.price - unit) * item.qty;
+      } else {
+        const pct =
+          item.discountPercent === null || item.discountPercent === undefined
+            ? pricing.discountPercent || 0
+            : item.discountPercent;
+        discount += (lineSubtotal * pct) / 100;
+      }
+    }
+
     const net = subtotal - discount;
     const tax = (net * (pricing.taxPercent || 0)) / 100;
 
@@ -105,7 +131,7 @@ export const CartProvider = ({ children }) => {
     if (pricing.freeDeliveryAbove > 0 && net >= pricing.freeDeliveryAbove) delivery = 0;
 
     return { subtotal, discount, net, tax, delivery, grandTotal: net + tax + delivery };
-  }, [cartTotal, pricing]);
+  }, [cartItems, pricing]);
 
   /** Payload shape the order API expects. */
   const orderItems = useMemo(
@@ -126,6 +152,7 @@ export const CartProvider = ({ children }) => {
         cartTotal,
         cartCount,
         estimate,
+        unitPriceOf,
         isCheckoutOpen,
         openCheckout,
         closeCheckout,

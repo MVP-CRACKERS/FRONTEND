@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Minus, Plus, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Minus, Plus, Loader2, AlertCircle, Download, Check } from 'lucide-react';
 import { useCart } from '../CartContext';
 import { useCatalog } from '../CatalogContext';
+import { downloadPriceList } from '../api/client';
 
 
 
 export default function PriceList() {
   // Live price list from MongoDB (falls back to the offline copy).
-  const { categories: CATEGORIES, loading, isLive, error, apiProblem, refresh } = useCatalog();
+  const { categories: CATEGORIES, loading, loaded, isEmpty, error, apiProblem, refresh } = useCatalog();
 
   const [openSections, setOpenSections] = useState({});
 
@@ -32,6 +33,40 @@ export default function PriceList() {
     setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
+  // A card in "Shop by Category" asks us to reveal that section.
+  useEffect(() => {
+    const onOpenCategory = (e) => {
+      const id = e.detail?.categoryId;
+      if (!id) return;
+      setOpenSections((prev) => ({ ...prev, [id]: true }));
+      // Wait for the section to expand before scrolling to it.
+      requestAnimationFrame(() => {
+        document.getElementById(`cat-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    };
+    window.addEventListener('mvp:open-category', onOpenCategory);
+    return () => window.removeEventListener('mvp:open-category', onOpenCategory);
+  }, []);
+
+  // Same PDF the hero offers, repeated here where people actually browse.
+  const [pdfState, setPdfState] = useState('idle');
+  const [pdfError, setPdfError] = useState('');
+
+  const handleDownloadPdf = async () => {
+    if (pdfState === 'busy') return;
+    setPdfState('busy');
+    setPdfError('');
+    try {
+      await downloadPriceList();
+      setPdfState('done');
+      setTimeout(() => setPdfState('idle'), 4000);
+    } catch (err) {
+      setPdfError(err.message || 'The price list could not be downloaded.');
+      setPdfState('error');
+      setTimeout(() => setPdfState('idle'), 6000);
+    }
+  };
+
 
 
   
@@ -41,38 +76,86 @@ export default function PriceList() {
         
         {/* Section Heading */}
         <div className="text-center mb-10">
-          <h2 className="text-4xl font-heading text-neutral-dark inline-block relative uppercase tracking-wide">
+          <h2 className="text-3xl sm:text-4xl font-heading font-extrabold text-neutral-dark inline-block relative uppercase tracking-tight">
             Price List
             <div className="absolute -bottom-2 left-0 w-full h-1 bg-accent-metallic rounded-full"></div>
           </h2>
+
+          <div className="mt-8 flex flex-col items-center gap-2">
+            <button
+              onClick={handleDownloadPdf}
+              disabled={pdfState === 'busy' || CATEGORIES.length === 0}
+              className="bg-primary-deep text-white font-bold px-6 py-3 rounded-full inline-flex items-center gap-2 hover:bg-green-800 disabled:opacity-60 disabled:cursor-wait transition-colors"
+            >
+              {pdfState === 'busy' ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" /> Preparing PDF...
+                </>
+              ) : pdfState === 'done' ? (
+                <>
+                  <Check className="w-5 h-5" /> Downloaded
+                </>
+              ) : (
+                <>
+                  <Download className="w-5 h-5" /> Download Full Price List (PDF)
+                </>
+              )}
+            </button>
+            <p className="text-xs text-gray-500">
+              Every item with photos and today's prices — easy to print or send on WhatsApp.
+            </p>
+            {pdfError && <p className="text-sm text-red-600 font-semibold">{pdfError}</p>}
+          </div>
         </div>
 
-        {loading && (
-          <div className="flex items-center justify-center gap-2 text-gray-500 font-medium mb-6">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            Loading the latest prices...
+        {/* Loading — nothing is rendered from code, so wait for the API */}
+        {loading && CATEGORIES.length === 0 && (
+          <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-500">
+            <Loader2 className="w-8 h-8 animate-spin" />
+            <span className="font-medium">Loading the latest prices...</span>
           </div>
         )}
 
-        {!loading && !isLive && error && (
-          <div className="mb-6 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <span className="text-sm font-semibold">
-              {apiProblem
-                ? apiProblem.message
-                : 'Showing our saved price list — we could not reach the live catalogue just now. Your order total is always confirmed by our server before it is placed.'}
-            </span>
+        {/* The API could not be reached */}
+        {!loading && error && (
+          <div className="bg-amber-50 border-2 border-amber-200 text-amber-900 rounded-xl p-6 flex flex-col items-center text-center gap-4">
+            <AlertCircle className="w-10 h-10" />
+            <div>
+              <p className="font-bold text-lg">We could not load the price list</p>
+              <p className="text-sm mt-2 max-w-xl leading-relaxed">
+                {apiProblem
+                  ? apiProblem.message
+                  : 'Our price list could not be reached just now. Prices come live from our server, so we would rather show you nothing than show you the wrong price. Please try again in a moment.'}
+              </p>
+            </div>
             <button
               onClick={refresh}
-              className="shrink-0 bg-amber-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-amber-700 transition-colors"
+              className="bg-amber-600 text-white font-bold px-6 py-3 rounded-lg hover:bg-amber-700 transition-colors"
             >
-              Retry
+              Try again
             </button>
           </div>
         )}
 
+        {/* Connected, but there is genuinely nothing to sell yet */}
+        {!loading && !error && isEmpty && (
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-12 text-center">
+            <p className="text-xl font-bold text-gray-700">Our price list is being updated</p>
+            <p className="text-gray-500 mt-2">
+              No crackers are listed at the moment. Please check back shortly, or message us on
+              WhatsApp and we will help you straight away.
+            </p>
+          </div>
+        )}
+
+        {CATEGORIES.length > 0 && (
         <div className="bg-white shadow-xl rounded-xl border border-gray-100 overflow-hidden">
           {CATEGORIES.map((category) => (
-            <div key={category.id} className="border-b border-gray-200 last:border-b-0">
+            <div
+              key={category.id}
+              id={`cat-${category.id}`}
+              className="border-b border-gray-200 last:border-b-0 scroll-mt-24"
+            >
               
               {/* Category Header */}
               <button 
@@ -82,6 +165,9 @@ export default function PriceList() {
                   <h3 className="text-red-600 font-bold text-2xl underline decoration-red-600/30 underline-offset-4 uppercase">
                     {category.title}
                   </h3>
+                  <p className="text-gray-400 text-sm mt-1 font-medium">
+                    {category.items.length} {category.items.length === 1 ? 'product' : 'products'}
+                  </p>
                 </div>
                 <div className="text-gray-400">
                   {openSections[category.id] ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
@@ -105,8 +191,18 @@ export default function PriceList() {
                   <div className="flex flex-col gap-4 md:gap-0">
                     {category.items.map((item) => {
                       const qty = cart[item.id] || 0;
-                      const subtotal = qty * item.price;
-                      const soldOut = item.isAvailable === false || item.stock === 0;
+                      const subtotal = qty * (item.offerPrice ?? item.price);
+                      // Two different reasons a product cannot be bought —
+                      // say which, so "out of stock" never means "an admin
+                      // flag is off".
+                      const outOfStock = item.stock === 0;
+                      const unavailable = item.isAvailable === false;
+                      const soldOut = outOfStock || unavailable;
+                      const onOffer =
+                        item.offerPrice !== null &&
+                        item.offerPrice !== undefined &&
+                        item.offerPrice < item.price;
+                      const unitPrice = onOffer ? item.offerPrice : item.price;
 
                       return (
                         <div key={item.id} className="flex flex-col md:grid md:grid-cols-12 gap-4 items-center border border-gray-100 md:border-0 md:border-b md:last:border-b-0 py-6 px-4 hover:bg-gray-50 transition-colors rounded-lg md:rounded-none">
@@ -120,9 +216,14 @@ export default function PriceList() {
                                   {item.name}
                                 </h4>
                                 <p className="text-fuchsia-600 text-sm mt-2 font-medium">{item.tamilName}</p>
+                                {onOffer && (
+                                  <span className="inline-block mt-2 mr-2 bg-green-100 text-green-800 text-xs font-bold uppercase tracking-wide px-2 py-1 rounded">
+                                    Offer
+                                  </span>
+                                )}
                                 {soldOut && (
                                   <span className="inline-block mt-2 bg-red-100 text-red-700 text-xs font-bold uppercase tracking-wide px-2 py-1 rounded">
-                                    Out of stock
+                                    {outOfStock ? 'Out of stock' : 'Currently unavailable'}
                                   </span>
                                 )}
                               </div>
@@ -136,9 +237,22 @@ export default function PriceList() {
                           </div>
 
                           {/* Sales Price */}
-                          <div className="col-span-2 lg:col-span-2 w-full flex justify-between md:justify-center mb-4 md:mb-0">
+                          <div className="col-span-2 lg:col-span-2 w-full flex justify-between md:justify-center md:flex-col md:items-center mb-4 md:mb-0">
                             <span className="md:hidden text-gray-500 text-base font-bold">Price:</span>
-                            <span className="text-green-700 font-bold text-base md:text-lg">Rs. {item.price.toFixed(2)}</span>
+                            {onOffer ? (
+                              <>
+                                <span className="text-green-700 font-bold text-base md:text-lg">
+                                  Rs. {item.offerPrice.toFixed(2)}
+                                </span>
+                                <span className="text-gray-400 text-sm line-through md:mt-0.5 ml-2 md:ml-0">
+                                  Rs. {item.price.toFixed(2)}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-green-700 font-bold text-base md:text-lg">
+                                Rs. {item.price.toFixed(2)}
+                              </span>
+                            )}
                           </div>
 
                           {/* Quantity Controls & Subtotal */}
@@ -187,11 +301,9 @@ export default function PriceList() {
               )}
             </div>
           ))}
-        </div>
+          </div>
+        )}
       </div>
-      
-      {/* Checkout Modal */}
-      
     </section>
   );
 }

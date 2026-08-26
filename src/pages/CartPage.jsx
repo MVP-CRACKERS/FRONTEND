@@ -7,13 +7,27 @@ import { Link } from 'react-router-dom';
 export default function CartPage() {
   // cartItems / estimate come from the live price list, and the estimate
   // uses the same percentages the backend applies.
-  const { cartItems, updateQuantity, setQuantity, removeItem, cartTotal, estimate, openCheckout } =
+  const { cart, cartItems, updateQuantity, setQuantity, removeItem, cartTotal, estimate, openCheckout } =
     useCart();
-  const { pricing } = useCatalog();
+  const { pricing, loading } = useCatalog();
+
+  // A product can be withdrawn from sale while it is sitting in someone's
+  // cart. Those lines simply stop resolving, so say what happened rather
+  // than letting the total change with no explanation.
+  const missingCount = Object.keys(cart).length - cartItems.length;
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 py-12 min-h-[60vh]">
-      <h1 className="text-4xl font-heading text-neutral-dark mb-8">YOUR CART</h1>
+      <h1 className="text-3xl sm:text-4xl font-heading font-extrabold text-neutral-dark mb-8 tracking-tight">YOUR CART</h1>
+
+      {!loading && missingCount > 0 && (
+        <div className="mb-6 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-sm font-semibold">
+          {missingCount === 1
+            ? '1 item in your cart is no longer available and has been removed.'
+            : `${missingCount} items in your cart are no longer available and have been removed.`}{' '}
+          Your total below reflects only what we can still deliver.
+        </div>
+      )}
       
       {cartItems.length === 0 ? (
         <div className="text-center py-20 bg-gray-50 rounded-xl border border-gray-200">
@@ -48,7 +62,15 @@ export default function CartPage() {
                   </div>
                 </div>
                 <div className="w-full md:w-auto col-span-2 flex justify-between md:justify-center items-center font-bold text-gray-700">
-                  <span className="md:hidden text-gray-500 font-normal">Price:</span>Rs. {item.price.toFixed(2)}</div>
+                  <span className="md:hidden text-gray-500 font-normal">Price:</span>
+                  {item.offerPrice != null && item.offerPrice < item.price ? (
+                    <span className="flex items-baseline gap-2">
+                      <span>Rs. {item.offerPrice.toFixed(2)}</span>
+                      <span className="text-xs text-gray-400 line-through font-normal">Rs. {item.price.toFixed(2)}</span>
+                    </span>
+                  ) : (
+                    <span>Rs. {item.price.toFixed(2)}</span>
+                  )}</div>
                 <div className="w-full md:w-auto col-span-2 flex justify-between md:justify-center items-center">
                   <span className="md:hidden text-gray-500 font-normal">Qty:</span>
                   <div className="flex items-center bg-white border border-gray-300 rounded h-10 w-28">
@@ -59,7 +81,7 @@ export default function CartPage() {
                 </div>
                 <div className="w-full md:w-auto col-span-2 flex items-center justify-between md:justify-end gap-4 border-t md:border-t-0 pt-4 md:pt-0 mt-2 md:mt-0">
                   <span className="md:hidden text-gray-500 font-normal">Total:</span>
-                  <span className="font-bold text-lg text-neutral-dark">Rs. {(item.price * item.qty).toFixed(2)}</span>
+                  <span className="font-bold text-lg text-neutral-dark">Rs. {((item.offerPrice ?? item.price) * item.qty).toFixed(2)}</span>
                   <button onClick={() => removeItem(item.id)} className="text-gray-400 hover:text-red-600 transition-colors"><Trash2 className="w-5 h-5" /></button>
                 </div>
               </div>
