@@ -23,6 +23,16 @@ function assertApiUrl(mode) {
   // eslint-disable-next-line no-console
   console.log(`\n  VITE_API_URL = ${url || '(empty)'}\n  source: ${from}\n`);
 
+  const raw = env.VITE_API_URL || '';
+  if (raw !== raw.trim()) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '  NOTE: this value has leading/trailing whitespace (dashboards use a\n' +
+        '  multi-line box, so a pasted URL often keeps a newline). The app trims\n' +
+        '  it, but it is worth cleaning up at the source.\n'
+    );
+  }
+
   if (!isProd) return;
 
   const fail = (why, fix) => {

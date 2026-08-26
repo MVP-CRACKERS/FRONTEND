@@ -5,8 +5,12 @@
  * here — the API key, database URI and JWT secret stay on the server.
  */
 
+// .trim() matters: hosting dashboards use a multi-line textarea for this
+// value, so a pasted URL easily carries a trailing newline. Without the
+// trim it becomes "https://host\n/api" and every request 404s for a
+// reason nothing on screen would explain.
 const RAW_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-export const API_BASE = String(RAW_BASE).replace(/\/+$/, '');
+export const API_BASE = String(RAW_BASE).trim().replace(/\/+$/, '');
 const API = `${API_BASE}/api`;
 
 const TOKEN_KEY = 'mvp_admin_token';
