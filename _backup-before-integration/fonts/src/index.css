@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Poppins', sans-serif;
+  --font-heading: 'Bebas Neue', sans-serif;
+  --font-price: 'Oswald', sans-serif;
+  --color-primary-deep: #0F3D1E;
+  --color-primary-mid: #1B7A3E;
+  --color-accent-electric: #7FFC50;
+  --color-accent-metallic: #D4AF37;
+  --color-neutral-dark: #0A0A0A;
+  --color-neutral-light: #FFFFFF;
+  --color-support-cream: #FFF8E7;
+  --animate-zoom-in-out: zoom-in-out 3s ease-in-out infinite;
+  @keyframes zoom-in-out {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+  }
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-neutral-light);
+  color: var(--color-neutral-dark);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+}
+
+.font-price {
+  font-family: var(--font-price);
+}

@@ -1,9 +1,29 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────
+   FONTS
+   Montserrat for headings, Inter for body text.
+
+   To try a different pairing, change the two variables below AND the
+   Google Fonts <link> in index.html to match. Tested alternatives:
+
+   Warmer / friendlier
+     --font-heading: 'Poppins';   --font-sans: 'Inter';
+     ...css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800
+
+   Premium / gifting
+     --font-heading: 'Playfair Display';  --font-sans: 'Source Sans 3';
+     ...css2?family=Playfair+Display:wght@600;700;800&family=Source+Sans+3:wght@400;600;700
+
+   Condensed (fits more text per line, closest to the old look)
+     --font-heading: 'Oswald';    --font-sans: 'Inter';
+     ...css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700
+   ───────────────────────────────────────────────────────────── */
+
 @theme {
-  --font-sans: 'Poppins', sans-serif;
-  --font-heading: 'Bebas Neue', sans-serif;
-  --font-price: 'Oswald', sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-heading: 'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-price: 'Inter', system-ui, sans-serif;
   --color-primary-deep: #0F3D1E;
   --color-primary-mid: #1B7A3E;
   --color-accent-electric: #7FFC50;
@@ -22,12 +42,22 @@ body {
   font-family: var(--font-sans);
   background-color: var(--color-neutral-light);
   color: var(--color-neutral-dark);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
+  font-weight: 700;
+  /* Montserrat is wider than the display face it replaced, so pull the
+     letter-spacing in slightly to keep long ALL-CAPS headings on one line. */
+  letter-spacing: -0.01em;
 }
 
-.font-price {
+/* Prices and quantities line up in columns only with tabular figures. */
+.font-price,
+input[type='number'] {
   font-family: var(--font-price);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
 }

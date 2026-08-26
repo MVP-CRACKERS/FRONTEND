@@ -1,0 +1,19 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+
+# Generated invoice PDFs — regenerated from the DB, never commit
+invoices/*
+!invoices/.gitkeep
+
+npm-debug.log*
+yarn-error.log*
+*.log
+
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+coverage/
+tmp/
