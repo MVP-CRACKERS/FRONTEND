@@ -39,6 +39,7 @@ const STATUS_FILTERS = [
   { value: '', label: 'All products' },
   { value: 'active', label: 'Active only' },
   { value: 'inactive', label: 'Inactive only' },
+  { value: 'unavailable', label: 'Not orderable' },
   { value: 'on_offer', label: 'On offer' },
   { value: 'out_of_stock', label: 'Out of stock' },
 ];
@@ -878,13 +879,32 @@ export default function CrackersPanel({ onCatalogChanged }) {
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span
-                        className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${
-                          p.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'
-                        }`}
-                      >
-                        {p.isActive ? 'Active' : 'Inactive'}
-                      </span>
+                      {/* Three real states, not two. A product can be active
+                          yet not orderable, and hiding that is what made an
+                          "Active" row show as out of stock in the shop. */}
+                      {!p.isActive ? (
+                        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600">
+                          Inactive
+                        </span>
+                      ) : !p.isAvailable ? (
+                        <span
+                          className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800"
+                          title="Visible in the shop but shown as unavailable. Tick 'Available to order' in Edit to put it back on sale."
+                        >
+                          Not orderable
+                        </span>
+                      ) : p.trackStock && p.stock <= 0 ? (
+                        <span
+                          className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800"
+                          title="Stock has run down to zero, so customers cannot order it."
+                        >
+                          Out of stock
+                        </span>
+                      ) : (
+                        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                          Active
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">

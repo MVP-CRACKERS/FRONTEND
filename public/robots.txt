@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# The admin panel is behind a login, but there is no reason to index it.
+Disallow: /admin
+
+Sitemap: https://mvpcrackers.com/sitemap.xml
