@@ -108,6 +108,13 @@ async function request(path, { method = 'GET', body, auth = false, timeout = 300
 const SERVICE_NAME = 'mvp-crackers-backend';
 let apiCheck = null;
 
+// A shopper on mvpcrackers.com must never be shown a build command or an
+// internal hostname. They get something they can act on instead.
+const IS_DEV = import.meta.env.DEV;
+const SHOPPER_MESSAGE =
+  "We're having trouble loading today's prices. Please try again in a moment — " +
+  'or message us on WhatsApp and we will send the price list straight to you.';
+
 export function checkApiTarget() {
   if (apiCheck) return apiCheck;
 
@@ -118,20 +125,23 @@ export function checkApiTarget() {
 
       if (body?.service === SERVICE_NAME) return { ok: true };
 
-      const message =
+      // Developers need the diagnosis; customers must never be told to
+      // run npm. Both get logged to the console — only the developer
+      // wording is ever rendered on screen.
+      const dev =
         `Something other than the MVP Crackers backend is answering at ${API_BASE}. ` +
         `Start the backend (npm run dev in the Backend folder) or change VITE_API_URL ` +
         `in Frontend/.env to the port it is actually running on, then restart npm run dev.`;
       // eslint-disable-next-line no-console
-      console.error('[MVP] ' + message);
-      return { ok: false, reason: 'wrong-service', message };
+      console.error('[MVP] ' + dev);
+      return { ok: false, reason: 'wrong-service', message: IS_DEV ? dev : SHOPPER_MESSAGE, devMessage: dev };
     } catch {
-      const message =
+      const dev =
         `No backend is answering at ${API_BASE}. Start it with "npm run dev" ` +
         `(or "npm run dev:demo") in the Backend folder.`;
       // eslint-disable-next-line no-console
-      console.warn('[MVP] ' + message);
-      return { ok: false, reason: 'unreachable', message };
+      console.warn('[MVP] ' + dev);
+      return { ok: false, reason: 'unreachable', message: IS_DEV ? dev : SHOPPER_MESSAGE, devMessage: dev };
     }
   })();
 

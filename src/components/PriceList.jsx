@@ -128,12 +128,24 @@ export default function PriceList() {
                   : 'Our price list could not be reached just now. Prices come live from our server, so we would rather show you nothing than show you the wrong price. Please try again in a moment.'}
               </p>
             </div>
-            <button
-              onClick={refresh}
-              className="bg-amber-600 text-white font-bold px-6 py-3 rounded-lg hover:bg-amber-700 transition-colors"
-            >
-              Try again
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={refresh}
+                className="bg-amber-600 text-white font-bold px-6 py-3 rounded-lg hover:bg-amber-700 transition-colors"
+              >
+                Try again
+              </button>
+              {/* Never let a shopper reach a dead end: if the server is
+                  down they can still order the way most customers do. */}
+              <a
+                href="https://wa.me/919043621639"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-primary-mid text-white font-bold px-6 py-3 rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Order on WhatsApp
+              </a>
+            </div>
           </div>
         )}
 
