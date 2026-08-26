@@ -1,8 +1,64 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-export default defineConfig({
+/**
+ * VITE_API_URL is baked into the bundle at build time and cannot be changed
+ * afterwards. A wrong value produces a shop that looks perfectly fine and
+ * silently reaches nothing — which is exactly what happened when the host's
+ * dashboard held a stale value that quietly overrode .env.production.
+ *
+ * So: say out loud what got baked in, and refuse to build a production
+ * bundle that is certain to be broken.
+ */
+function assertApiUrl(mode) {
+  const env = loadEnv(mode, process.cwd(), 'VITE_');
+  const url = (env.VITE_API_URL || '').trim();
+  const isProd = mode === 'production';
+
+  const from = process.env.VITE_API_URL
+    ? 'the hosting platform (Vercel Environment Variables) — this OVERRIDES .env.production'
+    : `a local env file (.env.${mode}, or .env)`;
+
+  // eslint-disable-next-line no-console
+  console.log(`\n  VITE_API_URL = ${url || '(empty)'}\n  source: ${from}\n`);
+
+  if (!isProd) return;
+
+  const fail = (why, fix) => {
+    throw new Error(
+      `\n\n  Refusing to build: VITE_API_URL is ${why}.\n` +
+        `  Value : ${url || '(empty)'}\n` +
+        `  Source: ${from}\n` +
+        `  Fix   : ${fix}\n`
+    );
+  };
+
+  if (!url) fail('not set', 'set it to https://api.mvpcrackers.com');
+
+  // api-mvpcrackers.com was never a registered domain: no NS, no SOA. It is
+  // a separate domain, not a subdomain, so it can never resolve.
+  if (/api-mvpcrackers\.com/.test(url)) {
+    fail(
+      'the api-mvpcrackers.com domain, which does not exist',
+      'use https://api.mvpcrackers.com (a subdomain of the domain you own). ' +
+        'If this came from Vercel, edit it under Settings -> Environment Variables and redeploy.'
+    );
+  }
+
+  if (/^http:\/\//.test(url)) {
+    fail('plain http', 'browsers block http calls from an https page — use https://');
+  }
+
+  if (/localhost|127\.0\.0\.1/.test(url)) {
+    fail('a localhost address', 'nobody else can reach your machine — use the public API domain');
+  }
+}
+
+export default defineConfig(({ mode }) => {
+  assertApiUrl(mode);
+
+  return {
   plugins: [react(), tailwindcss()],
 
   // Served from the domain root on mvpcrackers.com.
@@ -46,4 +102,5 @@ export default defineConfig({
   preview: {
     port: 4173,
   },
+  };
 });
