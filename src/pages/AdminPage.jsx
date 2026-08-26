@@ -13,8 +13,9 @@ import {
   Lock,
   ClipboardList,
   Sparkles,
+  ChevronDown,
 } from 'lucide-react';
-import { ToastProvider } from '../components/admin/AdminUI';
+import { ToastProvider, Modal, Field, fieldOk, useToast } from '../components/admin/AdminUI';
 import CrackersPanel from './admin/CrackersPanel';
 import { useCatalog } from '../CatalogContext';
 import {
@@ -65,6 +66,126 @@ const Badge = ({ value }) => (
     {value}
   </span>
 );
+
+// Payment status, changeable straight from the orders table.
+//
+// The server refuses to mark an order Paid without a reference — the UPI
+// transaction id, the cheque number, "cash on delivery". That is deliberate:
+// once money is recorded as received there has to be something to check it
+// against. So picking "Paid" here asks for that reference; the other
+// statuses apply immediately.
+function PaymentCell({ order, onChanged }) {
+  const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [reference, setReference] = useState('');
+  const { notify } = useToast();
+
+  const apply = async (paymentStatus, ref) => {
+    setBusy(true);
+    try {
+      await adminUpdatePaymentStatus(order.id, paymentStatus, ref || '');
+      notify(`${order.orderNumber} marked ${paymentStatus}.`, 'success');
+      setAsking(false);
+      setReference('');
+      await onChanged?.();
+    } catch (err) {
+      notify(err.message || 'Could not update the payment status.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onPick = (next) => {
+    if (next === order.paymentStatus) return;
+    if (next === 'Paid') {
+      setReference(order.paymentReference || '');
+      setAsking(true);
+      return;
+    }
+    apply(next);
+  };
+
+  return (
+    <>
+      {/* The row opens the order drawer, so every click in here has to stop. */}
+      <div onClick={(e) => e.stopPropagation()} className="relative inline-flex items-center">
+        <select
+          value={order.paymentStatus}
+          disabled={busy}
+          onChange={(e) => onPick(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Payment status for ${order.orderNumber}`}
+          className={`appearance-none cursor-pointer rounded-full pl-2.5 pr-7 py-1 text-xs font-bold
+            border-2 border-transparent hover:border-current/30 focus:outline-none
+            focus:ring-2 focus:ring-[#0F3D1E]/20 disabled:opacity-50
+            ${STATUS_STYLES[order.paymentStatus] || 'bg-gray-100 text-gray-700'}`}
+        >
+          {PAYMENT_STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        {busy ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin absolute right-2 pointer-events-none" />
+        ) : (
+          <ChevronDown className="w-3.5 h-3.5 absolute right-2 pointer-events-none opacity-60" />
+        )}
+      </div>
+
+      {/* The dialog is a child of the row in the React tree, so its clicks
+          bubble to the row's onClick even though it paints over the page.
+          Without this wrapper, confirming a payment also opens the order
+          drawer behind the dialog. */}
+      <div onClick={(e) => e.stopPropagation()}>
+        <Modal
+          open={asking}
+          title={`Mark ${order.orderNumber} as Paid`}
+          size="sm"
+          onClose={() => !busy && setAsking(false)}
+        >
+          <p className="text-sm text-gray-600 mb-4">
+            {order.customerName} · {money(order.grandTotal)}
+          </p>
+          <Field
+            label="Payment reference"
+            required
+            hint="UPI transaction id, cheque number, or 'Cash on delivery'. This is stored with the order so the payment can be traced later."
+          >
+            <input
+              autoFocus
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && reference.trim() && !busy) apply('Paid', reference.trim());
+              }}
+              placeholder="e.g. 402318844271"
+              className={fieldOk}
+            />
+          </Field>
+
+          <div className="mt-5 flex flex-col-reverse sm:flex-row justify-end gap-3">
+            <button
+              onClick={() => setAsking(false)}
+              disabled={busy}
+              className="px-5 py-2.5 border-2 border-gray-200 rounded-lg font-bold text-sm hover:bg-gray-50 disabled:opacity-40"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => apply('Paid', reference.trim())}
+              disabled={busy || !reference.trim()}
+              className="px-5 py-2.5 bg-green-700 text-white rounded-lg font-bold text-sm hover:bg-green-800 disabled:opacity-40 inline-flex items-center justify-center gap-2"
+            >
+              {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+              Mark Paid
+            </button>
+          </div>
+        </Modal>
+      </div>
+    </>
+  );
+}
 
 const money = (n) => `Rs. ${Number(n || 0).toFixed(2)}`;
 const when = (d) =>
@@ -664,7 +785,7 @@ function OrdersPanel({ onUnauthorized }) {
                       <Badge value={o.orderStatus} />
                     </td>
                     <td className="px-4 py-3">
-                      <Badge value={o.paymentStatus} />
+                      <PaymentCell order={o} onChanged={load} />
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
                       {when(o.createdAt)}
