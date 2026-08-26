@@ -253,6 +253,14 @@ export const adminUpdatePaymentStatus = (id, paymentStatus, paymentReference) =>
     auth: true,
   });
 
+/**
+ * Polled by the notification bell. `since` is a server timestamp handed
+ * back from the previous call, so "new" never depends on the browser's
+ * clock being correct.
+ */
+export const adminOrderFeed = (since) =>
+  request(`/orders/feed${since ? `?since=${encodeURIComponent(since)}` : ''}`, { auth: true });
+
 // ── Admin: crackers / products ──────────────────────────────
 const qs = (params = {}) => {
   const q = new URLSearchParams(

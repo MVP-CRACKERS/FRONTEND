@@ -15,7 +15,7 @@ const CatalogContext = createContext(null);
 
 const DEFAULT_PRICING = {
   discountPercent: 10,
-  taxPercent: 5.833,
+  taxPercent: 0,
   deliveryCharge: 0,
   freeDeliveryAbove: 0,
   whitebagCharge: 0,

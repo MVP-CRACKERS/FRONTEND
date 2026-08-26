@@ -67,12 +67,15 @@ export default function Hero() {
         <div className="w-full md:w-[60%] flex flex-col items-start gap-6">
           <div className="bg-accent-metallic/10 border border-accent-metallic text-accent-metallic text-sm font-bold px-4 py-1.5 rounded-full flex items-center gap-2 uppercase">
             <Zap className="w-4 h-4" />
-            Most valuable pyrotech
+            Direct from Sivakasi
           </div>
-          
+
+          {/* The badge used to read "Most valuable pyrotech"; that line is
+              now the headline, so the badge carries a different claim
+              rather than saying the same thing twice. */}
           <h1 className="text-red-500 drop-shadow-md font-heading font-extrabold text-3xl sm:text-4xl md:text-[34px] lg:text-[48px] xl:text-[60px] leading-[1.08] uppercase tracking-tight">
-            UNLEASH THE POWER <br />
-            <span className="text-accent-electric drop-shadow-[0_0_15px_rgba(57,255,20,0.5)]">OF DIWALI</span>
+            MOST VALUABLE <br />
+            <span className="text-accent-electric drop-shadow-[0_0_15px_rgba(57,255,20,0.5)]">PYROTECH</span>
           </h1>
           
           <p className="text-white/90 text-lg md:text-xl max-w-lg">

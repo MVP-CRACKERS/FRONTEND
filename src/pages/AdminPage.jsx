@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { ToastProvider, Modal, Field, fieldOk, useToast } from '../components/admin/AdminUI';
 import CrackersPanel from './admin/CrackersPanel';
+import OrderNotifications from '../components/admin/OrderNotifications';
 import { useCatalog } from '../CatalogContext';
 import {
   adminLogin,
@@ -479,10 +480,12 @@ function OrderDetail({ orderId, onClose, onChanged }) {
                   <span>Discount ({order.discountPercent}%)</span>
                   <span>- {money(order.discountAmount)}</span>
                 </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>GST / Tax ({order.taxPercent}%)</span>
-                  <span>{money(order.taxAmount)}</span>
-                </div>
+                {order.taxAmount > 0 && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>GST / Tax ({order.taxPercent}%)</span>
+                    <span>{money(order.taxAmount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-gray-600">
                   <span>Delivery</span>
                   <span>{order.deliveryCharge > 0 ? money(order.deliveryCharge) : 'FREE'}</span>
@@ -612,11 +615,16 @@ function OrderDetail({ orderId, onClose, onChanged }) {
 // ─────────────────────────────────────────────────────────────
 //  Orders panel
 // ─────────────────────────────────────────────────────────────
-function OrdersPanel({ onUnauthorized }) {
+function OrdersPanel({ onUnauthorized, focusOrderId, refreshSignal }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState(null);
+
+  // Opening an order from the notification bell.
+  useEffect(() => {
+    if (focusOrderId) setSelectedId(focusOrderId);
+  }, [focusOrderId]);
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
@@ -636,6 +644,12 @@ function OrdersPanel({ onUnauthorized }) {
       setLoading(false);
     }
   }, [search, status, paymentStatus, page, onUnauthorized]);
+
+  // A new order arrived while this list was on screen — pull it in.
+  useEffect(() => {
+    if (refreshSignal) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
 
   // Debounced so typing in the search box doesn't hammer the API.
   useEffect(() => {
@@ -846,6 +860,9 @@ const TABS = [
 export default function AdminPage() {
   const [admin, setAdmin] = useState(null);
   const [checking, setChecking] = useState(true);
+  const [focusOrderId, setFocusOrderId] = useState(null);
+  const [refreshSignal, setRefreshSignal] = useState(0);
+
   const [tab, setTab] = useState(() => {
     try {
       return localStorage.getItem('mvp_admin_tab') || 'orders';
@@ -878,19 +895,31 @@ export default function AdminPage() {
     };
   }, []);
 
-  const selectTab = (id) => {
+  // Stable identities: OrdersPanel's `load` and the notification poller
+  // both depend on these, and a fresh arrow on every render restarts
+  // their effects continuously.
+  const selectTab = useCallback((id) => {
     setTab(id);
     try {
       localStorage.setItem('mvp_admin_tab', id);
     } catch {
       /* private browsing — the tab just won't be remembered */
     }
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setToken(null);
     setAdmin(null);
-  };
+  }, []);
+
+  const bumpRefresh = useCallback(() => setRefreshSignal((n) => n + 1), []);
+  const openOrderFromBell = useCallback(
+    (id) => {
+      selectTab('orders');
+      setFocusOrderId(id);
+    },
+    [selectTab]
+  );
 
   if (checking) {
     return (
@@ -913,6 +942,7 @@ export default function AdminPage() {
             </div>
             <div className="flex items-center gap-3 min-w-0">
               <span className="text-sm text-white/70 hidden lg:inline truncate">{admin.email}</span>
+              <OrderNotifications onRefresh={bumpRefresh} onOpenOrder={openOrderFromBell} />
               <button
                 onClick={logout}
                 className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg text-sm font-bold transition-colors shrink-0"
@@ -947,7 +977,11 @@ export default function AdminPage() {
 
         <main className="max-w-[1400px] mx-auto p-4 sm:p-6 flex flex-col gap-5">
           {tab === 'orders' ? (
-            <OrdersPanel onUnauthorized={logout} />
+            <OrdersPanel
+              onUnauthorized={logout}
+              focusOrderId={focusOrderId}
+              refreshSignal={refreshSignal}
+            />
           ) : (
             <CrackersPanel onCatalogChanged={refreshCatalog} />
           )}

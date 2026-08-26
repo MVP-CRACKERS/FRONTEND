@@ -446,7 +446,9 @@ export default function CheckoutModal() {
                     readOnly
                     className="text-green-600"
                   />
-                  <OutlinedField label="Tax (GST)" value={taxAmount.toFixed(2)} readOnly />
+                  {taxAmount > 0 && (
+                    <OutlinedField label="Tax (GST)" value={taxAmount.toFixed(2)} readOnly />
+                  )}
                 </div>
                 <div className="mt-5 pt-5 border-t border-gray-100 flex justify-between items-center">
                   <span className="text-gray-500 font-bold uppercase tracking-wider text-sm">Grand Total</span>

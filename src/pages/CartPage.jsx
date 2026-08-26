@@ -98,10 +98,12 @@ export default function CartPage() {
                 <span>Diwali Discount ({pricing.discountPercent}%)</span>
                 <span>- Rs. {estimate.discount.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between mb-3 text-gray-600">
-                <span>Estimated Tax ({pricing.taxPercent}%)</span>
-                <span>Rs. {estimate.tax.toFixed(2)}</span>
-              </div>
+              {estimate.tax > 0 && (
+                <div className="flex justify-between mb-3 text-gray-600">
+                  <span>Estimated Tax ({pricing.taxPercent}%)</span>
+                  <span>Rs. {estimate.tax.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between mb-6 text-gray-600">
                 <span>Delivery</span>
                 <span>{estimate.delivery > 0 ? `Rs. ${estimate.delivery.toFixed(2)}` : 'FREE'}</span>
