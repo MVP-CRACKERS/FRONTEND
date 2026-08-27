@@ -10,6 +10,10 @@ import { downloadPriceList } from '../api/client';
 import heroShotWebp from '../assets/dashboardmvp.webp';
 import heroShotPng from '../assets/dashboardmvp-fallback.png';
 
+// The offer banner. 1.3 MB as a PNG, 81 KB as WebP.
+import offerWebp from '../assets/80offer.webp';
+import offerPng from '../assets/80offer-fallback.png';
+
 export default function Hero() {
   const [pdfState, setPdfState] = React.useState('idle'); // idle | busy | done | error
   const [pdfError, setPdfError] = React.useState('');
@@ -72,6 +76,25 @@ export default function Hero() {
       <div className="max-w-[1280px] mx-auto px-4 w-full relative z-10 flex">
         {/* Left Content Stack */}
         <div className="w-full md:w-[55%] flex flex-col items-start gap-6">
+          {/* Offer banner. It leads the column because a discount is the
+              first thing a Diwali shopper looks for, and it sits in the
+              normal flow rather than pinned to a corner so it still shows
+              on mobile, where the product shot is hidden. */}
+          <img
+            src={offerWebp}
+            onError={(e) => {
+              if (e.currentTarget.dataset.fallback) return;
+              e.currentTarget.dataset.fallback = '1';
+              e.currentTarget.src = offerPng;
+            }}
+            alt="Up to 80% discount on all crackers"
+            width="900"
+            height="329"
+            loading="eager"
+            decoding="async"
+            className="w-full max-w-[420px] h-auto -rotate-2 drop-shadow-[0_8px_18px_rgba(0,0,0,0.45)] -mb-1"
+          />
+
           <div className="bg-accent-metallic/10 border border-accent-metallic text-accent-metallic text-sm font-bold px-4 py-1.5 rounded-full flex items-center gap-2 uppercase">
             <Zap className="w-4 h-4" />
             Direct from Sivakasi
