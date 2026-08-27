@@ -120,15 +120,35 @@ export default function OrderNotifications({ onOpenOrder, onRefresh }) {
       }
 
       if (res.orders.length) {
-        setOrders((prev) => {
-          const merged = [...res.orders, ...prev];
-          const seen = new Set();
-          return merged.filter((o) => !seen.has(o.id) && seen.add(o.id)).slice(0, 30);
-        });
+        // The feed now carries two kinds of thing: orders that arrived,
+        // and orders that merely changed — a customer sharing their
+        // invoice flips one from Pending to Confirmed with nobody in
+        // the admin panel touching it. Both must refresh the table, but
+        // only an arrival is news.
+        //
+        // `isNew !== false` rather than `isNew === true` so an older
+        // backend, which sends neither flag, still behaves as it did.
+        const arrivals = res.orders.filter((o) => o.isNew !== false);
+
+        if (arrivals.length) {
+          setOrders((prev) => {
+            const merged = [...arrivals, ...prev];
+            const seen = new Set();
+            return merged.filter((o) => !seen.has(o.id) && seen.add(o.id)).slice(0, 30);
+          });
+        }
+
+        // Keep the panel's own copies current, so a row already listed
+        // does not sit there showing a status the order has moved on
+        // from.
+        const changed = new Map(res.orders.map((o) => [o.id, o]));
+        setOrders((prev) =>
+          prev.map((o) => (changed.has(o.id) ? { ...o, ...changed.get(o.id) } : o))
+        );
 
         // The first call establishes the baseline — those orders are
         // history, not news, so they must not set off the chime.
-        if (!res.baseline && soundRef.current) playChime();
+        if (!res.baseline && arrivals.length && soundRef.current) playChime();
         if (!res.baseline) onRefreshRef.current?.();
       }
     } catch {

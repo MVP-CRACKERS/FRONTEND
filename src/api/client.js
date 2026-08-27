@@ -232,6 +232,34 @@ export async function fetchInvoiceFile(orderId, fileName = 'invoice.pdf') {
   return new File([blob], fileName, { type: 'application/pdf' });
 }
 
+/**
+ * Saves the invoice to the customer's device and hands back the same
+ * bytes as a File.
+ *
+ * WhatsApp's wa.me link format carries text only — there is no way to
+ * pre-attach a document to an addressed chat. So the next best thing is
+ * to make sure the PDF is already sitting in Downloads by the time the
+ * chat opens: attaching it is then a paperclip and one tap, instead of a
+ * trip back to the browser.
+ *
+ * Returned as a File as well so the same fetch can feed the native share
+ * sheet on phones that support sharing files, with no second download.
+ */
+export async function saveInvoiceFile(orderId, fileName = 'invoice.pdf') {
+  const file = await fetchInvoiceFile(orderId, fileName);
+
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+  return file;
+}
+
 // ── Admin ───────────────────────────────────────────────────
 export const adminLogin = (email, password) =>
   request('/auth/login', { method: 'POST', body: { email, password } });
@@ -322,6 +350,7 @@ export default {
   invoiceViewUrl,
   invoiceDownloadUrl,
   fetchInvoiceFile,
+  saveInvoiceFile,
   adminLogin,
   adminMe,
   adminChangePassword,

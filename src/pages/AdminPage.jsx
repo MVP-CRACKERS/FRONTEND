@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Loader2,
   LogOut,
@@ -313,12 +313,18 @@ function LoginScreen({ onSuccess }) {
 // ─────────────────────────────────────────────────────────────
 //  Order detail drawer
 // ─────────────────────────────────────────────────────────────
-function OrderDetail({ orderId, onClose, onChanged }) {
+function OrderDetail({ orderId, onClose, onChanged, onSynced }) {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [paymentRef, setPaymentRef] = useState('');
+
+  // Held in a ref so a parent that passes a fresh arrow function on
+  // every render cannot change `load`'s identity and re-trigger the
+  // fetch effect forever.
+  const onSyncedRef = useRef(onSynced);
+  onSyncedRef.current = onSynced;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -327,6 +333,14 @@ function OrderDetail({ orderId, onClose, onChanged }) {
       setOrder(res.order);
       setPaymentRef(res.order.paymentReference || '');
       setError('');
+
+      // This drawer always shows the live document, while the table
+      // behind it shows whatever was true when the page last loaded.
+      // Hand the fresh values up so the row underneath cannot contradict
+      // what is on screen right now. Patching one row rather than
+      // refetching keeps this free, and cannot loop: `load` only ever
+      // changes when `orderId` does.
+      onSyncedRef.current?.(res.order);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -645,6 +659,47 @@ function OrdersPanel({ onUnauthorized, focusOrderId, refreshSignal }) {
     }
   }, [search, status, paymentStatus, page, onUnauthorized]);
 
+  /**
+   * Corrects one row from a live copy of the order, without a refetch.
+   *
+   * The table is a snapshot taken when the page loaded; the drawer
+   * always fetches the current document. When a customer confirms their
+   * own order by sharing the invoice, the two disagree — the row says
+   * Pending while the drawer says Confirmed — and the row is the one
+   * that is wrong.
+   */
+  const syncRow = useCallback((fresh) => {
+    // The list projection exposes `id`; the drawer gets the raw
+    // document, which has `_id`.
+    const id = String(fresh?._id || fresh?.id || '');
+    if (!id) return;
+    setData((prev) => {
+      if (!prev?.orders) return prev;
+      let touched = false;
+      const orders = prev.orders.map((o) => {
+        if (String(o.id) !== id) return o;
+        if (
+          o.orderStatus === fresh.orderStatus &&
+          o.paymentStatus === fresh.paymentStatus &&
+          o.grandTotal === fresh.grandTotal
+        ) {
+          return o;
+        }
+        touched = true;
+        return {
+          ...o,
+          orderStatus: fresh.orderStatus,
+          paymentStatus: fresh.paymentStatus,
+          paymentReference: fresh.paymentReference || '',
+          grandTotal: fresh.grandTotal,
+        };
+      });
+      // Returning `prev` unchanged when nothing moved keeps this from
+      // re-rendering the table on every drawer open.
+      return touched ? { ...prev, orders } : prev;
+    });
+  }, []);
+
   // A new order arrived while this list was on screen — pull it in.
   useEffect(() => {
     if (refreshSignal) load();
@@ -843,7 +898,12 @@ function OrdersPanel({ onUnauthorized, focusOrderId, refreshSignal }) {
           )}
         </div>
       {selectedId && (
-        <OrderDetail orderId={selectedId} onClose={() => setSelectedId(null)} onChanged={load} />
+        <OrderDetail
+          orderId={selectedId}
+          onClose={() => setSelectedId(null)}
+          onChanged={load}
+          onSynced={syncRow}
+        />
       )}
     </>
   );

@@ -13,6 +13,7 @@ import {
   Download,
   Eye,
   Share2,
+  Paperclip,
 } from 'lucide-react';
 import {
   placeOrder,
@@ -20,7 +21,29 @@ import {
   invoiceDownloadUrl,
   ApiError,
   markInvoiceShared,
+  saveInvoiceFile,
+  fetchInvoiceFile,
 } from '../api/client';
+
+/** Filename the customer will be looking for in their Downloads. */
+const invoiceFileName = (invoiceNumber) =>
+  `MVP-Crackers-${String(invoiceNumber || 'Invoice').replace(/[^A-Za-z0-9-]/g, '-')}.pdf`;
+
+/**
+ * Can this device attach a PDF to a share?
+ *
+ * Web Share Level 2 (`navigator.share` with files) is the only way a web
+ * page can hand an actual document to WhatsApp. It exists on phones and
+ * almost nowhere on the desktop, and it must be asked with a real File —
+ * `canShare({ files: [] })` answers false everywhere.
+ */
+const canShareFiles = (file) => {
+  try {
+    return Boolean(navigator.canShare?.({ files: [file] }) && navigator.share);
+  } catch {
+    return false;
+  }
+};
 
 const OutlinedField = ({ label, type = 'text', value, readOnly, className = '' }) => (
   <div className={`relative ${className}`}>
@@ -82,6 +105,14 @@ export default function CheckoutModal() {
   const [confirmError, setConfirmError] = React.useState('');
 
   const [shareNote, setShareNote] = React.useState('');
+
+  // The invoice PDF, once fetched. Kept so the attach step does not
+  // download the same file a second time.
+  const [invoiceFile, setInvoiceFile] = React.useState(null);
+  const [attachBusy, setAttachBusy] = React.useState(false);
+  // Shown only after the chat has been opened — asking someone to attach
+  // an invoice before they have a chat open makes no sense.
+  const [attachReady, setAttachReady] = React.useState(false);
 
   // "919043621639" -> "+91 90436 21639", so the customer can see exactly
   // who the message is addressed to before they send it.
@@ -172,6 +203,8 @@ export default function CheckoutModal() {
     setSubmitError('');
     setFormErrors({});
     setShareNote('');
+    setInvoiceFile(null);
+    setAttachReady(false);
     closeCheckout();
   };
 
@@ -200,19 +233,26 @@ export default function CheckoutModal() {
   };
 
   /**
-   * Opens a WhatsApp chat addressed to the SHOP, with the order details
-   * and the invoice link already typed. The customer only has to press
-   * send.
+   * Step one of two: open a WhatsApp chat addressed to the SHOP, with
+   * the order details and the invoice link already typed, and save the
+   * invoice PDF to the customer's device on the way.
    *
-   * Deliberately not the OS share sheet: that lets the customer pick any
-   * contact, so the order could be sent to a friend — or nobody — while
-   * the shop hears nothing. `whatsappUrl` is a wa.me link carrying the
-   * shop's number, so the message can only go to one place.
+   * Deliberately not the OS share sheet for this step: that lets the
+   * customer pick any contact, so the order could be sent to a friend —
+   * or nobody — while the shop hears nothing. `whatsappUrl` is a wa.me
+   * link carrying the shop's number, so the message can only go to one
+   * place.
    *
-   * WhatsApp's link format cannot carry an attachment, so the PDF cannot
-   * be pre-attached to an addressed chat. The message includes the
-   * invoice link instead, and Download Invoice is there for anyone who
-   * wants to attach the file by hand.
+   * The cost of that guarantee is the attachment. wa.me links carry text
+   * and nothing else; no query parameter, header or trick attaches a
+   * document, because WhatsApp does not accept one. Only the WhatsApp
+   * Business API, sending from a verified number server-side, can put a
+   * PDF into a chat automatically.
+   *
+   * So the PDF is downloaded here instead, while the customer is still
+   * looking at this screen. By the time WhatsApp is in front of them the
+   * file is already in Downloads, and `handleAttachPdf` (or the
+   * paperclip) puts it in the chat.
    */
   const handleWhatsApp = async () => {
     if (!confirmation || shareBusy) return;
@@ -226,6 +266,9 @@ export default function CheckoutModal() {
       // indistinguishable from a blocked popup. Opening normally and
       // then severing `opener` gives the same protection while still
       // telling us whether the tab actually opened.
+      //
+      // This runs first, and synchronously, because a popup opened after
+      // an `await` has lost its user gesture and browsers block it.
       const win = window.open(confirmation.whatsappUrl, '_blank');
       if (win) win.opener = null;
 
@@ -239,13 +282,87 @@ export default function CheckoutModal() {
       }
 
       await confirmShared();
+
+      // Now put the PDF on the device. A failure here is not worth
+      // failing the order over — the message already carries the invoice
+      // link, and View / Download Invoice are still on screen.
+      const fileName = invoiceFileName(confirmation.invoiceNumber);
+      let saved = null;
+      try {
+        saved = await saveInvoiceFile(confirmation.orderId, fileName);
+      } catch {
+        /* handled by the wording below */
+      }
+
+      setInvoiceFile(saved);
+      setAttachReady(true);
       setShareNote(
-        `WhatsApp has opened a chat with MVP Crackers on ${shopNumberDisplay}, with your order ` +
-          'details already typed. Press send in WhatsApp to complete your order. The invoice link ' +
-          'is in the message — use Download Invoice if you would also like to attach the PDF.'
+        saved
+          ? `WhatsApp is open on a chat with MVP Crackers (${shopNumberDisplay}) with your order ` +
+              `details already typed, and the invoice has been saved to your device as ` +
+              `"${fileName}". Press send in WhatsApp, then attach the invoice — use the ` +
+              'button below, or the paperclip in WhatsApp and choose Document.'
+          : `WhatsApp is open on a chat with MVP Crackers (${shopNumberDisplay}) with your order ` +
+              'details already typed. Press send to complete your order. The invoice link is in ' +
+              'the message, and Download Invoice below saves the PDF if you would like to attach it.'
       );
     } finally {
       setShareBusy(false);
+    }
+  };
+
+  /**
+   * Step two: hand the actual PDF to WhatsApp.
+   *
+   * This one has to be the share sheet, because it is the only route a
+   * web page has to a file transfer — and unlike step one it cannot be
+   * addressed. That is acceptable here: the shop has already received
+   * the order details at the right number, so the worst case is a
+   * missing attachment rather than a missing order. MVP Crackers will
+   * also be at the top of the sheet's suggestions, having just been
+   * messaged.
+   */
+  const handleAttachPdf = async () => {
+    if (!confirmation || attachBusy) return;
+    setAttachBusy(true);
+    setConfirmError('');
+
+    const fileName = invoiceFileName(confirmation.invoiceNumber);
+    try {
+      const file = invoiceFile || (await fetchInvoiceFile(confirmation.orderId, fileName));
+      setInvoiceFile(file);
+
+      if (!canShareFiles(file)) {
+        // Desktop, mostly. Saving it is the only thing left that helps —
+        // WhatsApp Web takes a drag-and-drop from the Downloads folder.
+        await saveInvoiceFile(confirmation.orderId, fileName);
+        setShareNote(
+          `The invoice has been saved as "${fileName}". Attach it in WhatsApp with the paperclip ` +
+            '(choose Document), or drag the file into the chat if you are on WhatsApp Web.'
+        );
+        return;
+      }
+
+      await navigator.share({
+        files: [file],
+        title: `Invoice ${confirmation.invoiceNumber}`,
+        text: `Invoice ${confirmation.invoiceNumber} - ${confirmation.orderNumber}`,
+      });
+      setShareNote(
+        `Invoice sent. Please make sure you picked MVP Crackers (${shopNumberDisplay}) in the ` +
+          'share list — the same chat your order details went to.'
+      );
+    } catch (err) {
+      // The customer dismissing the share sheet lands here too, and is
+      // not an error worth shouting about.
+      if (err?.name !== 'AbortError') {
+        setConfirmError(
+          'We could not attach the invoice automatically. Use Download Invoice below, then ' +
+            'attach it in WhatsApp with the paperclip.'
+        );
+      }
+    } finally {
+      setAttachBusy(false);
     }
   };
 
@@ -312,8 +429,8 @@ export default function CheckoutModal() {
                 </p>
                 <p className="text-sm mt-1 leading-relaxed">
                   {isConfirmed
-                    ? 'We have received your order and will call you shortly to arrange delivery. Payment is Cash on Delivery.'
-                    : `The button below opens a WhatsApp chat with us on ${shopNumberDisplay}, with your order details already typed — just press send. Until then your order is saved but not confirmed. Payment is Cash on Delivery, so there is nothing to pay now.`}
+                    ? `We have received your order and will call you shortly to arrange delivery. Payment is Cash on Delivery. If you have not attached the invoice PDF to the WhatsApp chat on ${shopNumberDisplay} yet, please do — it helps us pack your order faster.`
+                    : `The button below opens a WhatsApp chat with us on ${shopNumberDisplay}, with your order details already typed — just press send. The invoice PDF is saved to your device at the same time, so you can attach it in the same chat. Until then your order is saved but not confirmed. Payment is Cash on Delivery, so there is nothing to pay now.`}
                 </p>
               </div>
             </div>
@@ -396,6 +513,40 @@ export default function CheckoutModal() {
             {shareNote && (
               <div className="shrink-0 mx-4 sm:mx-6 mb-4 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl p-4 text-sm font-medium">
                 {shareNote}
+              </div>
+            )}
+
+            {/* Step two. WhatsApp will not let a web link carry an
+                attachment, so the message and the PDF have to go as two
+                actions — this makes the second one obvious rather than
+                leaving it to the paperclip. */}
+            {attachReady && (
+              <div className="shrink-0 mx-4 sm:mx-6 mb-4 bg-white border-2 border-[#25D366]/40 rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                <Paperclip className="w-7 h-7 shrink-0 text-[#0F3D1E]" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-black text-gray-900">Now attach the invoice PDF</p>
+                  <p className="text-sm text-gray-600 mt-1 leading-relaxed">
+                    Your order details are already in the chat. Add the invoice itself as a
+                    document — it is saved on your device as{' '}
+                    <span className="font-semibold text-gray-800">
+                      {invoiceFileName(confirmation.invoiceNumber)}
+                    </span>
+                    .
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAttachPdf}
+                  disabled={attachBusy}
+                  className="shrink-0 px-6 py-3 bg-[#0F3D1E] text-white font-bold rounded-xl hover:bg-[#1B7A3E] disabled:opacity-70 disabled:cursor-not-allowed transition-all uppercase tracking-wide flex justify-center items-center gap-2"
+                >
+                  {attachBusy ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Paperclip className="w-5 h-5" />
+                  )}
+                  Attach Invoice PDF
+                </button>
               </div>
             )}
 
