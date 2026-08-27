@@ -80,7 +80,7 @@ export default function Hero() {
           
           <p className="text-white/90 text-lg md:text-xl max-w-lg">
             Chennai's trusted cracker store — premium Sivakasi crackers delivered to your doorstep.<br />
-            Min. order ₹1000 • 10% OFF above ₹3000 • FREE delivery above ₹5000<br />
+            Min. order ₹1000 • 10% OFF on everything • FREE delivery • Cash on Delivery<br />
             <span className="text-sm opacity-80">(Delivery within Chennai only)</span>
           </p>
           

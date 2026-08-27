@@ -19,7 +19,7 @@ const DEFAULT_PRICING = {
   deliveryCharge: 0,
   freeDeliveryAbove: 0,
   whitebagCharge: 0,
-  minOrderValue: 0,
+  minOrderValue: 1000,
 };
 
 export const CatalogProvider = ({ children }) => {

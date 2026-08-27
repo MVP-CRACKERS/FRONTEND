@@ -112,11 +112,37 @@ export default function CartPage() {
                 <span>Total</span>
                 <span>Rs. {estimate.grandTotal.toFixed(2)}</span>
               </div>
-              <p className="text-xs text-gray-400 mb-6">
-                Confirmed by our server when you place the order.
+              <p className="text-xs text-gray-400 mb-4">
+                Confirmed by our server when you place the order. Payment is
+                Cash on Delivery.
               </p>
-              <button onClick={openCheckout} className="w-full bg-primary-deep text-white font-bold py-4 rounded hover:bg-green-800 transition-colors text-lg flex justify-center items-center gap-2">
-                PROCEED TO CHECKOUT
+
+              {/* Below the minimum: say how much more, not just "no". */}
+              {!estimate.minMet && (
+                <div className="mb-4 rounded-lg border-2 border-amber-300 bg-amber-50 p-4 text-amber-900">
+                  <p className="font-bold text-sm">
+                    Minimum order value is Rs. {estimate.minRequired.toFixed(0)}. Please add more
+                    products to continue.
+                  </p>
+                  <p className="text-sm mt-1">
+                    Add Rs. {estimate.shortfall.toFixed(2)} more to place this order.
+                  </p>
+                </div>
+              )}
+
+              <button
+                onClick={openCheckout}
+                disabled={!estimate.minMet}
+                title={
+                  estimate.minMet
+                    ? undefined
+                    : `Add Rs. ${estimate.shortfall.toFixed(2)} more to reach the Rs. ${estimate.minRequired.toFixed(0)} minimum`
+                }
+                className="w-full bg-primary-deep text-white font-bold py-4 rounded hover:bg-green-800 transition-colors text-lg flex justify-center items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary-deep"
+              >
+                {estimate.minMet
+                  ? 'PROCEED TO CHECKOUT'
+                  : `ADD RS. ${estimate.shortfall.toFixed(0)} MORE`}
               </button>
               <Link to="/" className="block text-center mt-4 text-green-700 font-bold hover:underline">Continue Shopping</Link>
             </div>

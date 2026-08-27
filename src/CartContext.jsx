@@ -130,7 +130,25 @@ export const CartProvider = ({ children }) => {
     let delivery = pricing.deliveryCharge || 0;
     if (pricing.freeDeliveryAbove > 0 && net >= pricing.freeDeliveryAbove) delivery = 0;
 
-    return { subtotal, discount, net, tax, delivery, grandTotal: net + tax + delivery };
+    // Minimum order value, mirrored from the server so the buttons and
+    // the message update as items are added — the server decides for real
+    // when the order is placed. Measured on the product subtotal, before
+    // the discount, which is the figure the shopper is watching.
+    const minRequired = pricing.minOrderValue || 0;
+    const minMet = minRequired <= 0 || subtotal >= minRequired;
+    const shortfall = minMet ? 0 : Math.max(0, minRequired - subtotal);
+
+    return {
+      subtotal,
+      discount,
+      net,
+      tax,
+      delivery,
+      grandTotal: net + tax + delivery,
+      minRequired,
+      minMet,
+      shortfall,
+    };
   }, [cartItems, pricing]);
 
   /** Payload shape the order API expects. */

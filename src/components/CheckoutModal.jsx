@@ -109,6 +109,16 @@ export default function CheckoutModal() {
       return;
     }
 
+    // The button is already disabled below the minimum; this catches the
+    // keyboard path (Enter in a field submits the form) and anything that
+    // slips past. The server refuses it regardless.
+    if (!estimate.minMet) {
+      setSubmitError(
+        `Minimum order value is Rs. ${estimate.minRequired.toFixed(0)}. Please add more products to continue.`
+      );
+      return;
+    }
+
     const fd = new FormData(e.target);
     const payload = {
       name: (fd.get('name') || '').toString().trim(),
@@ -454,9 +464,28 @@ export default function CheckoutModal() {
                   <span className="text-gray-500 font-bold uppercase tracking-wider text-sm">Grand Total</span>
                   <span className="text-3xl font-black text-[#d32f2f]">Rs. {finalTotal.toFixed(2)}</span>
                 </div>
+                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between gap-3">
+                  <span className="text-gray-500 font-bold uppercase tracking-wider text-sm">
+                    Payment
+                  </span>
+                  <span className="inline-flex items-center gap-2 bg-green-50 text-green-800 border border-green-200 font-bold text-sm px-3 py-1.5 rounded-full">
+                    Cash on Delivery (COD)
+                  </span>
+                </div>
                 <p className="text-xs text-gray-400 mt-2">
-                  Final amount is confirmed by our server when you place the order.
+                  Pay the delivery agent in cash when your crackers arrive. Final amount is
+                  confirmed by our server when you place the order.
                 </p>
+
+                {!estimate.minMet && (
+                  <div className="mt-4 rounded-lg border-2 border-amber-300 bg-amber-50 p-3 text-amber-900">
+                    <p className="font-bold text-sm">
+                      Minimum order value is Rs. {estimate.minRequired.toFixed(0)}. Please add more
+                      products to continue.
+                    </p>
+                    <p className="text-sm mt-1">Add Rs. {estimate.shortfall.toFixed(2)} more.</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -599,11 +628,15 @@ export default function CheckoutModal() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || cartItems.length === 0}
+                  disabled={submitting || cartItems.length === 0 || !estimate.minMet}
                   className="w-2/3 px-6 py-4 bg-[#113e21] border-[4px] border-[#0066cc] text-white font-black rounded-2xl hover:bg-green-900 disabled:opacity-60 disabled:cursor-not-allowed transition-all uppercase tracking-widest text-xl flex justify-center items-center gap-3 shadow-md"
                 >
                   {submitting && <Loader2 className="w-6 h-6 animate-spin" />}
-                  {submitting ? 'PLACING ORDER...' : 'CONFIRM ORDER'}
+                  {submitting
+                    ? 'PLACING ORDER...'
+                    : estimate.minMet
+                      ? 'CONFIRM ORDER'
+                      : `ADD RS. ${estimate.shortfall.toFixed(0)} MORE`}
                 </button>
               </div>
             </div>
