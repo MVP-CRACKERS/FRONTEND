@@ -18,7 +18,6 @@ import {
   placeOrder,
   invoiceViewUrl,
   invoiceDownloadUrl,
-  fetchInvoiceFile,
   ApiError,
   markInvoiceShared,
 } from '../api/client';
@@ -81,7 +80,16 @@ export default function CheckoutModal() {
   // receives the order.
   const [shared, setShared] = React.useState(false);
   const [confirmError, setConfirmError] = React.useState('');
+
   const [shareNote, setShareNote] = React.useState('');
+
+  // "919043621639" -> "+91 90436 21639", so the customer can see exactly
+  // who the message is addressed to before they send it.
+  const shopNumberDigits = String(confirmation?.whatsappShopNumber || '919043621639');
+  const shopNumberDisplay =
+    shopNumberDigits.length === 12
+      ? `+${shopNumberDigits.slice(0, 2)} ${shopNumberDigits.slice(2, 7)} ${shopNumberDigits.slice(7)}`
+      : `+${shopNumberDigits}`;
 
   // One key per opening of the checkout. Kept in a ref so re-renders,
   // validation failures and retries all reuse the SAME key — the backend
@@ -173,12 +181,6 @@ export default function CheckoutModal() {
   };
 
   /**
-   * Mobile: hand the actual PDF to the OS share sheet so the customer can
-   * pick WhatsApp and send the file itself.
-   * Desktop: open WhatsApp Web with the message (which carries the invoice
-   * link) pre-filled, and download the PDF so it can be attached manually.
-   */
-  /**
    * Records the share with the server, which promotes the order to
    * Confirmed. A browser cannot observe whether WhatsApp actually sent
    * the message — no callback exists — so this marks the moment the
@@ -197,53 +199,50 @@ export default function CheckoutModal() {
     }
   };
 
+  /**
+   * Opens a WhatsApp chat addressed to the SHOP, with the order details
+   * and the invoice link already typed. The customer only has to press
+   * send.
+   *
+   * Deliberately not the OS share sheet: that lets the customer pick any
+   * contact, so the order could be sent to a friend — or nobody — while
+   * the shop hears nothing. `whatsappUrl` is a wa.me link carrying the
+   * shop's number, so the message can only go to one place.
+   *
+   * WhatsApp's link format cannot carry an attachment, so the PDF cannot
+   * be pre-attached to an addressed chat. The message includes the
+   * invoice link instead, and Download Invoice is there for anyone who
+   * wants to attach the file by hand.
+   */
   const handleWhatsApp = async () => {
     if (!confirmation || shareBusy) return;
     setShareBusy(true);
     setShareNote('');
     setConfirmError('');
 
-    const fileName = `${confirmation.invoiceNumber}.pdf`;
-
     try {
-      const file = await fetchInvoiceFile(confirmation.orderId, fileName);
+      // NOT window.open(url, '_blank', 'noopener'): passing "noopener"
+      // makes the call return null by specification, which is
+      // indistinguishable from a blocked popup. Opening normally and
+      // then severing `opener` gives the same protection while still
+      // telling us whether the tab actually opened.
+      const win = window.open(confirmation.whatsappUrl, '_blank');
+      if (win) win.opener = null;
 
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `Invoice ${confirmation.invoiceNumber}`,
-          text: confirmation.whatsappMessage,
-        });
-        await confirmShared();
-        setShareBusy(false);
+      if (!win) {
+        // Almost always a blocked popup.
+        setConfirmError(
+          'Your browser blocked WhatsApp from opening. Allow pop-ups for this site and try again, ' +
+            'or message us on ' + shopNumberDisplay + ' with your order number.'
+        );
         return;
       }
 
-      // Desktop fallback: download the PDF, then open WhatsApp Web.
-      const url = URL.createObjectURL(file);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
-
-      window.open(confirmation.whatsappUrl, '_blank', 'noopener');
       await confirmShared();
       setShareNote(
-        'Your invoice has been downloaded and WhatsApp has opened with the message ready. Attach the PDF from your Downloads folder if you would like to send the file too.'
-      );
-    } catch (err) {
-      if (err?.name === 'AbortError') {
-        // The customer dismissed the share sheet — not an error.
-        setShareBusy(false);
-        return;
-      }
-      window.open(confirmation.whatsappUrl, '_blank', 'noopener');
-      await confirmShared();
-      setShareNote(
-        'WhatsApp has opened with your order message. The invoice link is included — use "Download Invoice" if you need the PDF file.'
+        `WhatsApp has opened a chat with MVP Crackers on ${shopNumberDisplay}, with your order ` +
+          'details already typed. Press send in WhatsApp to complete your order. The invoice link ' +
+          'is in the message — use Download Invoice if you would also like to attach the PDF.'
       );
     } finally {
       setShareBusy(false);
@@ -314,7 +313,7 @@ export default function CheckoutModal() {
                 <p className="text-sm mt-1 leading-relaxed">
                   {isConfirmed
                     ? 'We have received your order and will call you shortly to arrange delivery. Payment is Cash on Delivery.'
-                    : 'Sharing the invoice is how we receive your order. Until then it is saved but not confirmed. Payment is Cash on Delivery — nothing to pay now.'}
+                    : `The button below opens a WhatsApp chat with us on ${shopNumberDisplay}, with your order details already typed — just press send. Until then your order is saved but not confirmed. Payment is Cash on Delivery, so there is nothing to pay now.`}
                 </p>
               </div>
             </div>
