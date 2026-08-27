@@ -2,7 +2,38 @@ import React from 'react';
 import { useCart } from '../CartContext';
 import { useCatalog } from '../CatalogContext';
 import { Trash2, Minus, Plus } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+
+/**
+ * Sends someone from the cart straight to the price list.
+ *
+ * A plain <Link to="/"> dropped them at the top of the home page, above
+ * the hero, with the products they came back for another screen away.
+ *
+ * The scroll cannot happen in the same tick as the navigation: the home
+ * page has not mounted yet, so #price-list does not exist. Rather than
+ * guess a delay, look for it on each frame until it appears — a slow
+ * catalog fetch never leaves the customer stranded at the top, and the
+ * attempts stop after a second either way.
+ */
+function useShopNow() {
+  const navigate = useNavigate();
+
+  return React.useCallback(() => {
+    navigate('/');
+
+    const deadline = Date.now() + 1000;
+    const tryScroll = () => {
+      const target = document.getElementById('price-list');
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      if (Date.now() < deadline) requestAnimationFrame(tryScroll);
+    };
+    requestAnimationFrame(tryScroll);
+  }, [navigate]);
+}
 
 export default function CartPage() {
   // cartItems / estimate come from the live price list, and the estimate
@@ -10,6 +41,7 @@ export default function CartPage() {
   const { cart, cartItems, updateQuantity, setQuantity, removeItem, cartTotal, estimate, openCheckout } =
     useCart();
   const { pricing, loading } = useCatalog();
+  const shopNow = useShopNow();
 
   // A product can be withdrawn from sale while it is sitting in someone's
   // cart. Those lines simply stop resolving, so say what happened rather
@@ -32,9 +64,13 @@ export default function CartPage() {
       {cartItems.length === 0 ? (
         <div className="text-center py-20 bg-gray-50 rounded-xl border border-gray-200">
           <p className="text-gray-500 mb-6 text-xl">Your cart is empty.</p>
-          <Link to="/" className="bg-accent-metallic text-neutral-dark font-bold px-8 py-3 rounded hover:bg-yellow-400 transition-colors">
+          <button
+            type="button"
+            onClick={shopNow}
+            className="bg-accent-metallic text-neutral-dark font-bold px-8 py-3 rounded hover:bg-yellow-400 transition-colors"
+          >
             START SHOPPING
-          </Link>
+          </button>
         </div>
       ) : (
         <div className="flex flex-col lg:flex-row gap-8">
@@ -144,7 +180,15 @@ export default function CartPage() {
                   ? 'PROCEED TO CHECKOUT'
                   : `ADD RS. ${estimate.shortfall.toFixed(0)} MORE`}
               </button>
-              <Link to="/" className="block text-center mt-4 text-green-700 font-bold hover:underline">Continue Shopping</Link>
+              {/* Same destination as START SHOPPING — someone adding more
+                  items wants the product list, not the top of the page. */}
+              <button
+                type="button"
+                onClick={shopNow}
+                className="block w-full text-center mt-4 text-green-700 font-bold hover:underline"
+              >
+                Continue Shopping
+              </button>
             </div>
           </div>
         </div>

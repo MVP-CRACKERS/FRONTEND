@@ -34,7 +34,22 @@ export default function Hero() {
   };
 
   return (
-    <section className="relative w-full h-[90vh] overflow-hidden flex items-center bg-primary-deep">
+    /*
+     * min-h on phones, fixed height only from md up.
+     *
+     * This used to be a flat h-[90vh] with overflow-hidden. On a tall
+     * phone the column fitted; on a short one (an iPhone SE, or any
+     * phone once the announcement bar wraps to three lines) it did not,
+     * and because the row is items-center the overflow was split evenly
+     * top and bottom — so the first item in the column, the 80% offer
+     * banner, was sliced off above the fold. That is why the banner
+     * appeared on some phones and not others.
+     *
+     * Letting the section grow to fit its content removes the guesswork:
+     * nothing is ever clipped, whatever the device height or how the
+     * text above happens to wrap.
+     */
+    <section className="relative w-full min-h-[90vh] md:h-[90vh] py-10 md:py-0 overflow-hidden flex items-center bg-primary-deep">
       
       {/* Background Layering */}
       <div className="absolute inset-0 z-0 overflow-hidden">

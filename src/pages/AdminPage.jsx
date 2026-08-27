@@ -31,7 +31,6 @@ import {
   getToken,
   setToken,
   checkApiTarget,
-  API_BASE,
 } from '../api/client';
 
 const ORDER_STATUSES = [
@@ -295,7 +294,10 @@ function LoginScreen({ onSuccess }) {
           </div>
         )}
 
-        <p className="text-xs text-gray-400 text-center -mt-1">API: {API_BASE}</p>
+        {/* The API address used to be printed here. It is infrastructure
+            detail on a page anyone can reach, and when the API is
+            actually unreachable the amber banner above says so in words
+            the shop owner can act on. */}
 
         <button
           type="submit"
