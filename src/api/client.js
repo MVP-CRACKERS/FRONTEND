@@ -168,6 +168,13 @@ export const placeOrder = (payload) => request('/orders', { method: 'POST', body
 
 export const fetchOrder = (orderId) => request(`/orders/${orderId}`);
 
+/**
+ * Tells the server the customer has shared the invoice on WhatsApp,
+ * which is what promotes the order from Pending to Confirmed.
+ */
+export const markInvoiceShared = (orderId, channel = 'whatsapp') =>
+  request(`/orders/${orderId}/shared`, { method: 'POST', body: { channel } });
+
 // ── Downloadable price list ─────────────────────────────────
 export const priceListUrl = ({ view = false } = {}) =>
   `${API}/products/price-list.pdf${view ? '?view=1' : ''}`;

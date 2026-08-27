@@ -20,6 +20,7 @@ import {
   invoiceDownloadUrl,
   fetchInvoiceFile,
   ApiError,
+  markInvoiceShared,
 } from '../api/client';
 
 const OutlinedField = ({ label, type = 'text', value, readOnly, className = '' }) => (
@@ -74,6 +75,12 @@ export default function CheckoutModal() {
   const [confirmation, setConfirmation] = React.useState(null);
   const [includeWhitebag, setIncludeWhitebag] = React.useState(false);
   const [shareBusy, setShareBusy] = React.useState(false);
+
+  // The order is created as Pending and only becomes Confirmed once the
+  // customer shares the invoice — that share is how the shop actually
+  // receives the order.
+  const [shared, setShared] = React.useState(false);
+  const [confirmError, setConfirmError] = React.useState('');
   const [shareNote, setShareNote] = React.useState('');
 
   // One key per opening of the checkout. Kept in a ref so re-renders,
@@ -171,10 +178,30 @@ export default function CheckoutModal() {
    * Desktop: open WhatsApp Web with the message (which carries the invoice
    * link) pre-filled, and download the PDF so it can be attached manually.
    */
+  /**
+   * Records the share with the server, which promotes the order to
+   * Confirmed. A browser cannot observe whether WhatsApp actually sent
+   * the message — no callback exists — so this marks the moment the
+   * customer chose to share.
+   */
+  const confirmShared = async () => {
+    if (!confirmation || shared) return;
+    try {
+      await markInvoiceShared(confirmation.orderId);
+      setShared(true);
+      setConfirmError('');
+    } catch (err) {
+      setConfirmError(
+        err.message || 'We could not confirm your order. Please try the share button again.'
+      );
+    }
+  };
+
   const handleWhatsApp = async () => {
     if (!confirmation || shareBusy) return;
     setShareBusy(true);
     setShareNote('');
+    setConfirmError('');
 
     const fileName = `${confirmation.invoiceNumber}.pdf`;
 
@@ -187,6 +214,7 @@ export default function CheckoutModal() {
           title: `Invoice ${confirmation.invoiceNumber}`,
           text: confirmation.whatsappMessage,
         });
+        await confirmShared();
         setShareBusy(false);
         return;
       }
@@ -202,6 +230,7 @@ export default function CheckoutModal() {
       setTimeout(() => URL.revokeObjectURL(url), 4000);
 
       window.open(confirmation.whatsappUrl, '_blank', 'noopener');
+      await confirmShared();
       setShareNote(
         'Your invoice has been downloaded and WhatsApp has opened with the message ready. Attach the PDF from your Downloads folder if you would like to send the file too.'
       );
@@ -212,6 +241,7 @@ export default function CheckoutModal() {
         return;
       }
       window.open(confirmation.whatsappUrl, '_blank', 'noopener');
+      await confirmShared();
       setShareNote(
         'WhatsApp has opened with your order message. The invoice link is included — use "Download Invoice" if you need the PDF file.'
       );
@@ -224,6 +254,9 @@ export default function CheckoutModal() {
   //  ORDER CONFIRMED
   // ───────────────────────────────────────────────────────────
   if (confirmation) {
+    // Confirmed only once the invoice has been shared. `invoiceShared`
+    // covers a page reload on an order that was already shared.
+    const isConfirmed = shared || confirmation.invoiceShared === true;
     const order = confirmation.order || {};
     const address = order.deliveryAddress || {};
     const addressLine = [
@@ -240,8 +273,14 @@ export default function CheckoutModal() {
         <div className="bg-white rounded-2xl w-full max-w-5xl h-[95vh] flex flex-col overflow-hidden animate-in zoom-in shadow-2xl">
           <div className="bg-gradient-to-r from-[#0F3D1E] to-[#1B7A3E] px-6 py-4 flex justify-between items-center shadow-md z-10">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-6 h-6 text-accent-electric" />
-              <h2 className="text-white text-xl sm:text-2xl font-bold tracking-wide">ORDER CONFIRMED</h2>
+              {isConfirmed ? (
+                <CheckCircle2 className="w-6 h-6 text-accent-electric" />
+              ) : (
+                <Share2 className="w-6 h-6 text-amber-300" />
+              )}
+              <h2 className="text-white text-xl sm:text-2xl font-bold tracking-wide">
+                {isConfirmed ? 'ORDER CONFIRMED' : 'ONE LAST STEP'}
+              </h2>
             </div>
             <button
               onClick={handleClose}
@@ -253,6 +292,33 @@ export default function CheckoutModal() {
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden bg-gray-50 flex flex-col">
+            {/* What the customer has to do, or confirmation that it is done. */}
+            <div
+              className={`shrink-0 mx-4 sm:mx-6 mt-4 rounded-xl border-2 p-4 sm:p-5 flex items-start gap-4 ${
+                isConfirmed
+                  ? 'bg-green-50 border-green-300 text-green-900'
+                  : 'bg-amber-50 border-amber-300 text-amber-900'
+              }`}
+            >
+              {isConfirmed ? (
+                <CheckCircle2 className="w-7 h-7 shrink-0 text-green-600" />
+              ) : (
+                <AlertCircle className="w-7 h-7 shrink-0 text-amber-600" />
+              )}
+              <div className="min-w-0">
+                <p className="font-black text-base sm:text-lg leading-snug">
+                  {isConfirmed
+                    ? 'Your order is confirmed. Thank you!'
+                    : 'Please share the invoice below on WhatsApp. Once the invoice is shared, your order will be confirmed.'}
+                </p>
+                <p className="text-sm mt-1 leading-relaxed">
+                  {isConfirmed
+                    ? 'We have received your order and will call you shortly to arrange delivery. Payment is Cash on Delivery.'
+                    : 'Sharing the invoice is how we receive your order. Until then it is saved but not confirmed. Payment is Cash on Delivery — nothing to pay now.'}
+                </p>
+              </div>
+            </div>
+
             {/* Order details strip */}
             <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 lg:min-h-0">
               <div className="lg:col-span-4 flex flex-col gap-3 lg:overflow-y-auto lg:pr-1">
@@ -264,6 +330,23 @@ export default function CheckoutModal() {
                   <div>
                     <div className="text-xs font-bold uppercase tracking-wider text-gray-400">Invoice Number</div>
                     <div className="text-lg font-black text-[#0F3D1E]">{confirmation.invoiceNumber}</div>
+                  </div>
+                  <div className="border-t border-gray-100 pt-3">
+                    <div className="text-xs font-bold uppercase tracking-wider text-gray-400">Status</div>
+                    <div
+                      className={`inline-flex items-center gap-2 mt-1 px-3 py-1.5 rounded-full text-sm font-bold ${
+                        isConfirmed
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          isConfirmed ? 'bg-green-600' : 'bg-amber-500 animate-pulse'
+                        }`}
+                      />
+                      {isConfirmed ? 'Confirmed' : 'Awaiting invoice share'}
+                    </div>
                   </div>
                   <div className="border-t border-gray-100 pt-3">
                     <div className="text-xs font-bold uppercase tracking-wider text-gray-400">Total Amount</div>
@@ -316,6 +399,26 @@ export default function CheckoutModal() {
                 {shareNote}
               </div>
             )}
+
+            {confirmError && (
+              <div className="shrink-0 mx-4 sm:mx-6 mb-4 bg-red-50 border border-red-200 text-red-900 rounded-xl p-4 text-sm font-semibold">
+                {confirmError}
+              </div>
+            )}
+
+            {/* If WhatsApp failed to open — blocked popup, no app installed —
+                the customer must not be stranded with an unconfirmed order. */}
+            {!isConfirmed && (
+              <div className="shrink-0 mx-4 sm:mx-6 mb-4 text-center">
+                <button
+                  type="button"
+                  onClick={confirmShared}
+                  className="text-sm font-bold text-gray-500 hover:text-[#0F3D1E] underline underline-offset-4"
+                >
+                  WhatsApp did not open? I have already sent the invoice
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Actions */}
@@ -343,10 +446,20 @@ export default function CheckoutModal() {
               onClick={handleWhatsApp}
               type="button"
               disabled={shareBusy}
-              className="px-8 py-4 bg-[#25D366] text-white font-black rounded-xl hover:bg-green-600 disabled:opacity-70 disabled:cursor-not-allowed transition-all uppercase tracking-widest text-lg flex justify-center items-center shadow-md gap-3"
+              className={`px-8 py-4 text-white font-black rounded-xl disabled:opacity-70 disabled:cursor-not-allowed transition-all uppercase tracking-widest text-lg flex justify-center items-center shadow-md gap-3 ${
+                isConfirmed
+                  ? 'bg-[#25D366] hover:bg-green-600'
+                  : 'bg-[#25D366] hover:bg-green-600 ring-4 ring-green-300 animate-pulse'
+              }`}
             >
               {shareBusy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
-              <span>{shareBusy ? 'Preparing...' : 'Order in Whats App'}</span>
+              <span>
+                {shareBusy
+                  ? 'Preparing...'
+                  : isConfirmed
+                    ? 'Share Again'
+                    : 'Share Invoice on WhatsApp'}
+              </span>
             </button>
           </div>
         </div>
