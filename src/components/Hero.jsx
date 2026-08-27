@@ -3,6 +3,13 @@ import { Download, Zap, Loader2, Check } from 'lucide-react';
 import { Fireworks } from '@fireworks-js/react';
 import { downloadPriceList } from '../api/client';
 
+// The hero product shot. WebP is 454 KB against 3.3 MB for the source
+// PNG — worth it for the largest image on the page, which is also the
+// first thing a customer waits for. The PNG fallback is only fetched by
+// browsers without WebP support, which is almost nobody now.
+import heroShotWebp from '../assets/dashboardmvp.webp';
+import heroShotPng from '../assets/dashboardmvp-fallback.png';
+
 export default function Hero() {
   const [pdfState, setPdfState] = React.useState('idle'); // idle | busy | done | error
   const [pdfError, setPdfError] = React.useState('');
@@ -64,7 +71,7 @@ export default function Hero() {
 
       <div className="max-w-[1280px] mx-auto px-4 w-full relative z-10 flex">
         {/* Left Content Stack */}
-        <div className="w-full md:w-[60%] flex flex-col items-start gap-6">
+        <div className="w-full md:w-[55%] flex flex-col items-start gap-6">
           <div className="bg-accent-metallic/10 border border-accent-metallic text-accent-metallic text-sm font-bold px-4 py-1.5 rounded-full flex items-center gap-2 uppercase">
             <Zap className="w-4 h-4" />
             Direct from Sivakasi
@@ -121,17 +128,30 @@ export default function Hero() {
           </div>
         </div>
         
-        {/* Right Mascot placeholder */}
-        <div className="hidden md:flex w-[40%] justify-center items-center relative">
-            <div className="absolute inset-0 flex items-center justify-center">
-                <div className="absolute w-96 h-96 bg-[#ffae00] rounded-full animate-ping opacity-40 mix-blend-screen"></div>
-                <div className="absolute w-[400px] h-[400px] bg-red-600 rounded-full animate-ping opacity-20 mix-blend-screen" style={{ animationDelay: '200ms', animationDuration: '1.5s' }}></div>
-                <img 
-                  src="/MVP.png" 
-                  alt="MVP Mascot" 
-                  className="w-96 h-96 bg-white rounded-full object-contain p-8 shadow-[0_0_60px_rgba(57,255,20,0.4)] border-4 border-accent-electric animate-zoom-in-out" 
-                />
-            </div>
+        {/* Right: the product shot.
+            No white circle or border here — that framing suited a square
+            logo, but this is a wide product pile and a circle would crop
+            the boxes at both ends. A drop shadow grounds it instead. */}
+        <div className="hidden md:flex w-[45%] justify-center items-center relative">
+          <img
+            src={heroShotWebp}
+            onError={(e) => {
+              // One retry with the PNG, then leave it alone — without the
+              // guard a broken path would loop the error handler forever.
+              if (e.currentTarget.dataset.fallback) return;
+              e.currentTarget.dataset.fallback = '1';
+              e.currentTarget.src = heroShotPng;
+            }}
+            alt="A selection of MVP Crackers Diwali fireworks — rockets, bombs, sparklers, ground chakkars and gift boxes"
+            width="1200"
+            height="800"
+            /* This is the largest-contentful-paint element, so it loads
+               eagerly and at high priority rather than being deferred. */
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+            className="relative w-full max-w-[640px] h-auto object-contain drop-shadow-[0_18px_35px_rgba(0,0,0,0.45)] animate-zoom-in-out"
+          />
         </div>
       </div>
     </section>
